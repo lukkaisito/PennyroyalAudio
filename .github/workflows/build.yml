@@ -4,7 +4,7 @@ name: Build & Release
 # Si subis un tag (ej: v1.1.0) ademas crea un Release con los instaladores.
 on:
   push:
-    branches: [ main ]
+    branches: [ main,  master ]
     tags: [ 'v*' ]
   workflow_dispatch:
 
