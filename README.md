@@ -59,4 +59,4 @@ C++17 · JUCE 8 · CMake · Inno Setup · CPack · GitHub Actions
 ## Licencia
 
 Este proyecto usa JUCE bajo su licencia open-source (AGPLv3),
-por lo que el código de Pennyroyal Audio se distribuye bajo **AGPLv3**.
+por lo que el código de Pennyroyal Audio se distribuye bajo **GPLv3**.
