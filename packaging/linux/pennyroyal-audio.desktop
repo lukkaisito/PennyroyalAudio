@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Pennyroyal Audio
+GenericName=Digital Audio Workstation
+Comment=Open-source DAW built with JUCE
+Exec=pennyroyal-audio
+Icon=pennyroyal-audio
+Terminal=false
+Categories=AudioVideo;Audio;Recorder;
