@@ -21,8 +21,7 @@ Forma parte de un ecosistema que incluye un pedal de Overdrive analógico diseñ
 - Metrónomo, Input Monitor, control de buffer/latencia
 - Guardar / abrir proyectos (`.pennyr`)
 - Exportación a WAV / MP3
-- Tema visual "In Utero"
-
+  
 ## Descarga
 
 Los instaladores están en la sección **[Releases](../../releases)**:
