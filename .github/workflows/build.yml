@@ -63,12 +63,23 @@ jobs:
       - name: Package (.deb + .tar.gz)
         run: cpack --config build/CPackConfig.cmake -B dist
 
+      - name: Package (.AppImage)
+        run: |
+          DESTDIR=$PWD/AppDir cmake --install build --prefix /usr
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export OUTPUT=PennyRoyalAudio-x86_64.AppImage
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+          mv PennyRoyalAudio-x86_64.AppImage dist/
+
       - uses: actions/upload-artifact@v4
         with:
           name: linux-packages
           path: |
             dist/*.deb
             dist/*.tar.gz
+            dist/*.AppImage
 
   release:
     if: github.ref_type == 'tag'

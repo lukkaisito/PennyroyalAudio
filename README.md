@@ -29,11 +29,13 @@ Los instaladores están en la sección **[Releases](../../releases)**:
 
 | Sistema | Archivo |
 |---|---|
-| Windows 10/11 (64 bits) | `PennyroyalAudio-x.x.x-Windows-Setup.exe` |
-| Ubuntu / Debian / Mint | `pennyroyal-audio_x.x.x_amd64.deb` |
-| Otras distros Linux | `pennyroyal-audio-x.x.x-Linux.tar.gz` |
+| Windows 10/11 (64 bits) | `PennyRoyalAudioSetup.exe` |
+| Cualquier Linux (Ubuntu, Fedora, Mint...) | `PennyRoyalAudio-x86_64.AppImage` |
+| Ubuntu / Debian / Mint | `pennyroyal-audio_amd64.deb` |
+| Otras distros (portable) | `pennyroyal-audio-linux.tar.gz` |
 
-En Linux: `sudo apt install ./pennyroyal-audio_x.x.x_amd64.deb`
+AppImage: darle permiso de ejecución (`chmod +x PennyRoyalAudio-x86_64.AppImage`) y abrirlo.
+.deb: `sudo apt install ./pennyroyal-audio_amd64.deb`
 
 ## Compilar desde el código
 
