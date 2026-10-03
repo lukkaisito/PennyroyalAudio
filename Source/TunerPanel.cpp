@@ -185,7 +185,7 @@ void TunerPanel::paint(juce::Graphics& g)
     // Title
     g.setFont(juce::Font(juce::FontOptions().withHeight(13.0f).withStyle("Bold")));
     g.setColour(c(GrisClaro));
-    g.drawText("CHROMATIC TUNER", 0, 14, w, 20, juce::Justification::centred);
+    g.drawText(TR("CHROMATIC TUNER"), 0, 14, w, 20, juce::Justification::centred);
 
     const float radius  = std::min(cx, cy) * 0.75f;
     const float arcFrom = juce::MathConstants<float>::pi * 0.85f;

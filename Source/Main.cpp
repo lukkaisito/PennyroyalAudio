@@ -8,7 +8,7 @@ class PennyroyalAudioApp : public juce::JUCEApplication
 {
 public:
     const juce::String getApplicationName()    override { return "Pennyroyal Audio"; }
-    const juce::String getApplicationVersion() override { return "1.0.0"; }
+    const juce::String getApplicationVersion() override { return "1.4.0"; }
     bool moreThanOneInstanceAllowed()           override { return true; }
 
     void initialise(const juce::String& /*commandLine*/) override
@@ -41,6 +41,7 @@ public:
             setContentOwned(new MainComponent(), true);
 
             setResizable(true, true);
+            setResizeLimits(1180, 720, 10000, 10000);
             centreWithSize(getWidth(), getHeight());
             setVisible(true);
         }

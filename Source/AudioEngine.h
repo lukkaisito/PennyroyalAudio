@@ -35,6 +35,45 @@ struct BiquadFilter
 };
 
 // ============================================================
+//  TrackDSP  --  processing state of one track (EQ + FX rack)
+// ============================================================
+struct TrackDSP
+{
+    BiquadFilter eqL[3], eqR[3];      // low / mid / high, one set per channel
+
+    // Overdrive
+    float driveHpL = 0, driveHpR = 0, driveHpInL = 0, driveHpInR = 0;
+    float toneL = 0, toneR = 0;
+
+    // Compressor
+    float compEnv = 0.0f;
+
+    // Delay
+    std::vector<float> delayL, delayR;
+    int delayWrite = 0;
+
+    // Reverb
+    juce::Reverb reverb;
+    juce::Reverb::Parameters revParams;
+
+    double sampleRate = 44100.0;
+
+    void prepare(double sr)
+    {
+        sampleRate = sr;
+        delayL.assign((size_t)(sr * 2.0) + 1, 0.0f);
+        delayR.assign((size_t)(sr * 2.0) + 1, 0.0f);
+        delayWrite = 0;
+        reverb.setSampleRate(sr);
+        reverb.reset();
+        for (auto& f : eqL) f.reset();
+        for (auto& f : eqR) f.reset();
+        driveHpL = driveHpR = driveHpInL = driveHpInR = toneL = toneR = 0.0f;
+        compEnv = 0.0f;
+    }
+};
+
+// ============================================================
 //  AudioEngine
 // ============================================================
 class AudioEngine : public juce::AudioIODeviceCallback,
@@ -52,9 +91,17 @@ public:
     void initialise();
     void shutdown();
     juce::AudioDeviceManager& getDeviceManager() { return deviceManager; }
+    double getDeviceSampleRate() const { return deviceSampleRate; }
+    int    getDeviceBufferSize() const { return deviceBufferSize; }
+
+    // Lock that protects the project while the audio thread reads it.
+    // Take it (ScopedLock) whenever clips / tracks are added, moved or removed.
+    juce::CriticalSection& getLock() { return audioLock; }
 
     // ---- Project -----------------------------------------------
     Project& getProject() { return project; }
+    Track*   addTrack(const juce::String& name = "Audio");
+    void     removeTrack(int index);
 
     // ---- Transport ---------------------------------------------
     void play();
@@ -62,16 +109,29 @@ public:
     void pause();
     void startRecording(int trackIndex);
     void stopRecording();
-    void undoLastRecording();
 
     TransportState getTransportState()      const { return transportState; }
     double         getPlayheadPositionSec() const;
     void           setPlayheadPositionSec(double sec);
 
+    // Live recording info for drawing the growing region
+    bool getRecordingInfo(int& trackIndex, double& startSec, double& lengthSec) const;
+
+    // Live waveform of the take being recorded (min/max per 128 samples).
+    // Returns the number of valid peaks; pointers stay valid while recording.
+    int  getLivePeaks(const float*& mins, const float*& maxs) const;
+
+    // ---- Track selection / record target -----------------------
+    // The record target (and the track the input monitor goes through) is the
+    // armed track, or the selected track when no track is armed.
+    void setSelectedTrack(int index) { selectedTrack.store(index); }
+    int  getSelectedTrack() const    { return selectedTrack.load(); }
+    int  getRecordTargetTrack() const;
+
     // ---- Loop --------------------------------------------------
-    void   setLoopEnabled(bool on)         { project.loopEnabled = on; }
-    bool   isLoopEnabled()           const { return project.loopEnabled; }
-    void   setLoopPoints(double s, double e);
+    void setLoopEnabled(bool on)       { project.loopEnabled = on; }
+    bool isLoopEnabled()         const { return project.loopEnabled; }
+    void setLoopPoints(double s, double e);
 
     // ---- Metronome ---------------------------------------------
     void setMetronomeEnabled(bool on) { metronomeEnabled = on; }
@@ -88,12 +148,16 @@ public:
     // ---- Buffer size -------------------------------------------
     void setBufferSize(int samples);
 
+    // ---- Undo / Redo (clip edits) ------------------------------
+    void pushUndoState();          // call BEFORE changing clips
+    bool undo();
+    bool redo();
+    bool canUndo() const { return !undoStack.empty(); }
+    bool canRedo() const { return !redoStack.empty(); }
+    void clearUndoHistory() { undoStack.clear(); redoStack.clear(); }
+
     // ---- Export ------------------------------------------------
     bool exportToWav(const juce::File& outputFile);
-    // NOTE: MP3 export via LAME requires linking liblame.
-    // To enable: install LAME, add liblame to CMake, and uncomment:
-    //   bool exportToMp3(const juce::File& outputFile, int bitrate = 192);
-    // The implementation is provided in AudioEngine.cpp (guarded by #ifdef JUCE_USE_LAME).
 
     // ---- Level meters ------------------------------------------
     float getOutputLevelL() const { return outputLevelL.load(std::memory_order_relaxed); }
@@ -101,14 +165,11 @@ public:
 
     // ---- Tuner ring buffer -------------------------------------
     int getTunerBuffer(float* dest, int maxSamples) const;
-    double getDeviceSampleRate() const { return deviceSampleRate; }
-
-    // ---- Track EQ management -----------------------------------
-    // Called when a track is removed to clean up EQ state
-    void removeTrackEQ(int trackIndex);
 
     // ---- Project serialization ---------------------------------
-    std::unique_ptr<juce::XmlElement> saveProjectToXml() const;
+    // Recorded clips that have no file yet are written as WAVs into
+    // "<project name>_Audio/" next to the project file.
+    std::unique_ptr<juce::XmlElement> saveProjectToXml(const juce::File& projectFile);
     bool loadProjectFromXml(const juce::XmlElement& xml);
 
     // ---- AudioIODeviceCallback ---------------------------------
@@ -121,15 +182,22 @@ public:
     void audioDeviceStopped() override;
 
 private:
-    void renderBlock(float* const* out, int numOut,
-                     const float* const* in, int numIn,
-                     int numSamples);
-    void mixTrackIntoOutput(int trackIndex,
-                            float* L, float* R,
-                            int numSamples,
-                            double blockStartSec);
+    using DSPPool = std::vector<std::unique_ptr<TrackDSP>>;
+
+    // Renders all tracks (+ FX) into L/R, adding to what is there.
+    void renderTracks(float* L, float* R, int numSamples, double blockStartSec,
+                      double sr, DSPPool& pool, juce::AudioBuffer<float>& scratch,
+                      bool live, bool renderClips = true,
+                      const float* monitorIn = nullptr, int monitorTrack = -1);
+    void renderClip(const AudioClip& clip, float* tl, float* tr, int numSamples,
+                    double blockStartSec, double sr);
+    void processTrackFX(Track& track, TrackDSP& dsp, float* l, float* r, int n);
     void renderMetronomeClick(float* L, float* R, int numSamples);
-    void rebuildEQPool();
+    void syncDSPPool(DSPPool& pool, double sr);
+
+    using ClipSnapshot = std::vector<std::vector<AudioClip>>;
+    ClipSnapshot takeSnapshot() const;
+    void         restoreSnapshot(const ClipSnapshot& s);
 
     // ---- Data --------------------------------------------------
     juce::AudioDeviceManager deviceManager;
@@ -141,34 +209,42 @@ private:
     int                deviceBufferSize { 512 };
 
     // Recording
-    int  recordingTrackIndex    { -1 };
-    int  lastRecordedTrackIndex { -1 };
-    int  lastRecordedClipIndex  { -1 };
+    int  recordingTrackIndex { -1 };
+    juce::int64 recordStartSample { 0 };
     std::unique_ptr<juce::AudioBuffer<float>> recordBuffer;
-    int  recordWritePos         { 0 };
-    static constexpr int MAX_RECORD_SAMPLES = 44100 * 300; // 5 min
+    int  recordWritePos { 0 };
+    int  maxRecordSamples { 44100 * 600 };   // 10 min
+
+    // live waveform of the current take
+    std::vector<float> livePeakMin, livePeakMax;
+    std::atomic<int>   livePeakCount { 0 };
+    float liveAccMin { 0.0f }, liveAccMax { 0.0f };
+    int   liveAccN { 0 };
+
+    std::atomic<int> selectedTrack { 0 };
 
     // Metronome
-    bool  metronomeEnabled       { false };
-    int   metronomeSampleCounter { 0 };
+    bool  metronomeEnabled { false };
 
     // Input monitor
-    std::atomic<bool>  inputMonitorEnabled { false };
+    std::atomic<bool> inputMonitorEnabled { false };
 
-    // Master volume
+    // Master
     float masterVolume { 0.85f };
-
-    // Level meters
     std::atomic<float> outputLevelL { 0.0f };
     std::atomic<float> outputLevelR { 0.0f };
 
-    // Per-track EQ
-    struct TrackEQ { BiquadFilter low, mid, high; };
-    std::vector<std::unique_ptr<TrackEQ>> trackEQs;
+    // Per-track DSP (live)
+    DSPPool liveDSP;
+    juce::AudioBuffer<float> liveScratch;
+
+    // Undo
+    std::vector<ClipSnapshot> undoStack, redoStack;
+    static constexpr size_t MAX_UNDO = 60;
 
     // Tuner ring buffer
-    float              tunerRing[TUNER_RING_SIZE] {};
-    std::atomic<int>   tunerWriteHead { 0 };
+    float            tunerRing[TUNER_RING_SIZE] {};
+    std::atomic<int> tunerWriteHead { 0 };
 
     juce::CriticalSection audioLock;
 

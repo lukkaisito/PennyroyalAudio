@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(PennyroyalAudio VERSION 1.1.0 LANGUAGES C CXX)
+project(PennyroyalAudio VERSION 1.4.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,6 +46,11 @@ juce_add_gui_app(PennyroyalAudio
 
 juce_generate_juce_header(PennyroyalAudio)
 
+# Embedded fonts (Resources/Fonts) -> BinaryData::...
+file(GLOB FontFiles CONFIGURE_DEPENDS "Resources/Fonts/*.ttf")
+juce_add_binary_data(PennyroyalAssets SOURCES ${FontFiles})
+set_target_properties(PennyroyalAssets PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+
 # ---------------------------------------------------------------
 # 3. Fuentes (todo lo que este en Source/)
 # ---------------------------------------------------------------
@@ -64,11 +69,17 @@ target_compile_definitions(PennyroyalAudio PRIVATE
     JUCE_PLUGINHOST_AU=0
 )
 
+# MSVC: read the source files as UTF-8 (Spanish texts with accents)
+if(MSVC)
+    target_compile_options(PennyroyalAudio PRIVATE /utf-8)
+endif()
+
 # ---------------------------------------------------------------
 # 5. Modulos JUCE
 # ---------------------------------------------------------------
 target_link_libraries(PennyroyalAudio
     PRIVATE
+        PennyroyalAssets
         juce::juce_audio_basics
         juce::juce_audio_devices
         juce::juce_audio_formats
