@@ -5,6 +5,7 @@
 #include "UIComponents.h"
 #include "TrackModels.h"
 #include "TunerPanel.h"
+#include "AppSettings.h"
 
 class TrackPanel;
 
@@ -356,6 +357,7 @@ private:
         juce::TextButton drvBtn { "DRV" }, cmpBtn { "CMP" }, dlyBtn { "DLY" }, revBtn { "REV" };
         juce::TextButton muteBtn { "M" }, soloBtn { "S" };
         juce::Rectangle<int> meterArea, eqLabels, dbArea, panArea;
+        bool compact { false };   // short window: EQ knobs in a row
     };
 
     struct MasterStrip : public juce::Component
@@ -448,6 +450,7 @@ public:
     std::function<void(bool)> onShowTipsChanged;
     std::function<void(int themeId, juce::uint32 accent)> onThemeChanged;
     std::function<void(int languageId)> onLanguageChanged;
+    std::function<void(float scale)> onUiScaleChanged;
 
 private:
     void updateAccentVisibility();
@@ -457,7 +460,7 @@ private:
     juce::PropertiesFile& settings;
     juce::AudioDeviceSelectorComponent deviceSelector;
     juce::ComboBox bufferSizeBox;
-    juce::ComboBox themeBox, languageBox;
+    juce::ComboBox themeBox, languageBox, uiScaleBox;
     juce::OwnedArray<ColourSwatch> swatches;
     juce::TextButton customColourBtn { "CUSTOM..." };
     juce::ToggleButton showTipsToggle { "Show quick-start tips when the program opens" };
@@ -485,6 +488,10 @@ public:
     bool keyPressed(const juce::KeyPress& key, juce::Component* origin) override;
     void changeListenerCallback(juce::ChangeBroadcaster*) override;
 
+    // Window size / position, remembered between sessions
+    juce::String getSavedWindowState()                  { return settings().getValue("windowState"); }
+    void         saveWindowState(const juce::String& s) { settings().setValue("windowState", s); settings().saveIfNeeded(); }
+
 private:
     void timerCallback() override;
     void showDAW();
@@ -496,6 +503,7 @@ private:
     void buildUI();
     void applyTheme(int themeId, juce::uint32 accent, bool rebuild);
     void applyLanguage(int languageId);
+    void applyUiScale(float scale);
     void rebuildUI();
     juce::PropertiesFile& settings() { return *appProps.getUserSettings(); }
 

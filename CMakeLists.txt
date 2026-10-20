@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(PennyroyalAudio VERSION 1.4.0 LANGUAGES C CXX)
+project(PennyroyalAudio VERSION 1.4.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -125,5 +125,6 @@ if(UNIX AND NOT APPLE)
     # Nombres fijos (sin numero de version) para que los links de la web no cambien
     set(CPACK_DEBIAN_FILE_NAME             "pennyroyal-audio_amd64.deb")
     set(CPACK_ARCHIVE_FILE_NAME            "pennyroyal-audio-linux")
+    set(CPACK_PACKAGE_FILE_NAME            "pennyroyal-audio-linux")
     include(CPack)
 endif()

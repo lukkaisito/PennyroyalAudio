@@ -126,7 +126,7 @@ void SplashScreenComponent::paint(juce::Graphics& g)
     // ---- footer ----
     g.setColour(c(GrisClaro).withAlpha(0.8f));
     g.setFont(PRFonts::num(11.0f));
-    g.drawText("v1.4.0  /  JUCE 8  /  C++17", 28, (int)h - 34, 300, 16, juce::Justification::centredLeft);
+    g.drawText("v1.4.1  /  JUCE 8  /  C++17", 28, (int)h - 34, 300, 16, juce::Justification::centredLeft);
     g.drawText(TR("EET N24 SIMON DE IRIONDO  /  OPEN SOURCE  /  GPLv3"), (int)w - 428, (int)h - 34, 400, 16,
                juce::Justification::centredRight);
 }
@@ -227,8 +227,10 @@ void TopBar::resized()
 {
     auto a = getLocalBounds().reduced(14, 0);
     const int cy = getHeight() / 2;
+    const bool compactLogo = getWidth() < 1310;   // only the round logo
+    const bool hideRecBox  = getWidth() < 1170;   // "records on" box hidden
 
-    logoArea = a.removeFromLeft(172);
+    logoArea = a.removeFromLeft(compactLogo ? 44 : 172);
 
     auto place = [&](juce::Component& comp, int w, int h, int gapAfter)
     {
@@ -257,9 +259,17 @@ void TopBar::resized()
     bpmSlider.setBounds(bpmCol.withHeight(26).withY(cy - 7));
     a.removeFromLeft(14);
 
-    auto recCol = a.removeFromLeft(150);
-    recCaption = recCol.withHeight(14).withY(cy - 23);
-    recArea    = recCol.withHeight(26).withY(cy - 7);
+    if (hideRecBox)
+    {
+        recCaption = {};
+        recArea    = {};
+    }
+    else
+    {
+        auto recCol = a.removeFromLeft(150);
+        recCaption = recCol.withHeight(14).withY(cy - 23);
+        recArea    = recCol.withHeight(26).withY(cy - 7);
+    }
 
     // right side: master
     auto right = getLocalBounds().reduced(14, 0).removeFromRight(190);
@@ -279,6 +289,8 @@ void TopBar::paint(juce::Graphics& g)
 
     // logo
     drawLogo(g, { (float)logoArea.getX() + 18.0f, (float)logoArea.getCentreY() }, 15.0f, 1.0f, 1.0f);
+    if (logoArea.getWidth() > 60)
+    {
     g.setColour(c(CremaClaro));
     g.setFont(juce::Font(juce::FontOptions(PRFonts::bebas()).withHeight(25.0f).withKerningFactor(0.05f)));
     g.drawText("PENNYROYAL", logoArea.withTrimmedLeft(42).withHeight(26).withY(logoArea.getCentreY() - 15),
@@ -287,6 +299,7 @@ void TopBar::paint(juce::Graphics& g)
     g.setFont(PRFonts::typewriter(11.0f));
     g.drawText("audio", logoArea.withTrimmedLeft(43).withHeight(12).withY(logoArea.getCentreY() + 8),
                juce::Justification::centredLeft);
+    }
 
     // separators
     g.setColour(c(Linea));
@@ -330,8 +343,9 @@ void TopBar::paint(juce::Graphics& g)
     }
 
     UI::drawCaption(g, bpmCaption, "BPM", juce::Justification::centredLeft);
-    UI::drawCaption(g, recCaption, TR("RECORDS ON"), juce::Justification::centredLeft);
+    if (!recArea.isEmpty())
     {
+        UI::drawCaption(g, recCaption, TR("RECORDS ON"), juce::Justification::centredLeft);
         auto r = recArea.toFloat();
         g.setColour(c(Negro));
         g.fillRoundedRectangle(r, 4.0f);
@@ -1974,31 +1988,57 @@ void MixerPanel::ChannelStrip::refreshFxButtons()
 void MixerPanel::ChannelStrip::resized()
 {
     auto a = getLocalBounds().reduced(8, 6);
-    a.removeFromTop(30);   // name
+    compact = getHeight() < 470;
+    a.removeFromTop(compact ? 26 : 30);   // name
 
-    eqLabels = a.removeFromTop(126);
-    auto eq = eqLabels;
-    for (auto* k : { &eqHigh, &eqMid, &eqLow })
-        k->setBounds(eq.removeFromTop(42).withTrimmedLeft(34).withSizeKeepingCentre(40, 40));
+    if (compact)
+    {
+        // EQ: three knobs side by side with captions underneath
+        eqLabels = a.removeFromTop(48);
+        auto row = eqLabels.withHeight(34);
+        const int kw = row.getWidth() / 3;
+        eqHigh.setBounds(row.removeFromLeft(kw).withSizeKeepingCentre(32, 32));
+        eqMid .setBounds(row.removeFromLeft(kw).withSizeKeepingCentre(32, 32));
+        eqLow .setBounds(row.withSizeKeepingCentre(32, 32));
 
-    a.removeFromTop(6);
-    auto fx1 = a.removeFromTop(22);
-    drvBtn.setBounds(fx1.removeFromLeft(fx1.getWidth() / 2).reduced(1));
-    cmpBtn.setBounds(fx1.reduced(1));
-    auto fx2 = a.removeFromTop(22);
-    dlyBtn.setBounds(fx2.removeFromLeft(fx2.getWidth() / 2).reduced(1));
-    revBtn.setBounds(fx2.reduced(1));
+        a.removeFromTop(4);
+        auto fx = a.removeFromTop(20);
+        const int bw = fx.getWidth() / 4;
+        drvBtn.setBounds(fx.removeFromLeft(bw).reduced(1, 0));
+        cmpBtn.setBounds(fx.removeFromLeft(bw).reduced(1, 0));
+        dlyBtn.setBounds(fx.removeFromLeft(bw).reduced(1, 0));
+        revBtn.setBounds(fx.reduced(1, 0));
 
-    a.removeFromTop(6);
-    panArea = a.removeFromTop(40);
-    panKnob.setBounds(panArea.withTrimmedLeft(34).withSizeKeepingCentre(38, 38));
+        a.removeFromTop(4);
+        panArea = a.removeFromTop(30);
+        panKnob.setBounds(panArea.withTrimmedLeft(34).withSizeKeepingCentre(28, 28));
+    }
+    else
+    {
+        eqLabels = a.removeFromTop(126);
+        auto eq = eqLabels;
+        for (auto* k : { &eqHigh, &eqMid, &eqLow })
+            k->setBounds(eq.removeFromTop(42).withTrimmedLeft(34).withSizeKeepingCentre(40, 40));
 
-    auto ms = a.removeFromBottom(24);
+        a.removeFromTop(6);
+        auto fx1 = a.removeFromTop(22);
+        drvBtn.setBounds(fx1.removeFromLeft(fx1.getWidth() / 2).reduced(1));
+        cmpBtn.setBounds(fx1.reduced(1));
+        auto fx2 = a.removeFromTop(22);
+        dlyBtn.setBounds(fx2.removeFromLeft(fx2.getWidth() / 2).reduced(1));
+        revBtn.setBounds(fx2.reduced(1));
+
+        a.removeFromTop(6);
+        panArea = a.removeFromTop(40);
+        panKnob.setBounds(panArea.withTrimmedLeft(34).withSizeKeepingCentre(38, 38));
+    }
+
+    auto ms = a.removeFromBottom(compact ? 22 : 24);
     muteBtn.setBounds(ms.removeFromLeft(ms.getWidth() / 2).reduced(1));
     soloBtn.setBounds(ms.reduced(1));
-    dbArea = a.removeFromBottom(20);
+    dbArea = a.removeFromBottom(compact ? 16 : 20);
 
-    a.removeFromTop(6);
+    a.removeFromTop(compact ? 4 : 6);
     meterArea = a.removeFromRight(14).withTrimmedTop(4).withTrimmedBottom(4);
     fader.setBounds(a);
 }
@@ -2015,12 +2055,22 @@ void MixerPanel::ChannelStrip::paint(juce::Graphics& g)
 
     g.setColour(c(CremaClaro));
     g.setFont(PRFonts::title(19.0f));
-    g.drawFittedText(UI::upper(track.name), getLocalBounds().reduced(8, 0).withHeight(36).withY(4),
+    g.drawFittedText(UI::upper(track.name), getLocalBounds().reduced(8, 0).withHeight(compact ? 30 : 36).withY(4),
                      juce::Justification::centred, 1);
 
     auto eq = eqLabels;
-    for (auto* name : { "HI", "MID", "LO" })
-        UI::drawCaption(g, eq.removeFromTop(42).withWidth(32), TR(name), juce::Justification::centredLeft);
+    if (compact)
+    {
+        auto caps = eq.withTrimmedTop(34);
+        const int kw = caps.getWidth() / 3;
+        for (auto* name : { "HI", "MID", "LO" })
+            UI::drawCaption(g, caps.removeFromLeft(kw), TR(name));
+    }
+    else
+    {
+        for (auto* name : { "HI", "MID", "LO" })
+            UI::drawCaption(g, eq.removeFromTop(42).withWidth(32), TR(name), juce::Justification::centredLeft);
+    }
 
     UI::drawCaption(g, panArea.withWidth(32), TR("PAN"), juce::Justification::centredLeft);
 
@@ -2159,7 +2209,7 @@ void MixerPanel::resized()
     auto a = getLocalBounds().reduced(16, 12);
     a.removeFromTop(40);   // title
 
-    rackArea = a.removeFromBottom(196);
+    rackArea = a.removeFromBottom(juce::jlimit(150, 196, (int)((float)a.getHeight() * 0.36f)));
     a.removeFromBottom(12);
 
     master.setBounds(a.removeFromRight(128).withTrimmedBottom(12));
@@ -2447,6 +2497,19 @@ SettingsPanel::SettingsPanel(AudioEngine& eng, juce::PropertiesFile& s)
     customColourBtn.onClick = [this] { openCustomColour(); };
     addAndMakeVisible(customColourBtn);
 
+    // ---- interface size ----
+    for (int i = 0; i < AppSettings::numScales; ++i)
+        uiScaleBox.addItem(juce::String(juce::roundToInt(AppSettings::scales[i] * 100.0f)) + "%", i + 1);
+    uiScaleBox.setSelectedItemIndex(AppSettings::indexOfScale(juce::Desktop::getInstance().getGlobalScaleFactor()),
+                                    juce::dontSendNotification);
+    uiScaleBox.setTooltip(TR("Makes the whole program smaller or bigger"));
+    uiScaleBox.onChange = [this]
+    {
+        const int i = uiScaleBox.getSelectedItemIndex();
+        if (i >= 0 && onUiScaleChanged) onUiScaleChanged(AppSettings::scales[i]);
+    };
+    addAndMakeVisible(uiScaleBox);
+
     // ---- audio ----
     addAndMakeVisible(deviceSelector);
     addAndMakeVisible(bufferSizeBox);
@@ -2465,7 +2528,7 @@ SettingsPanel::SettingsPanel(AudioEngine& eng, juce::PropertiesFile& s)
         if (onShowTipsChanged) onShowTipsChanged(showTipsToggle.getToggleState());
     };
 
-    UI::noFocus({ &languageBox, &themeBox, &customColourBtn, &bufferSizeBox, &showTipsToggle });
+    UI::noFocus({ &languageBox, &themeBox, &customColourBtn, &uiScaleBox, &bufferSizeBox, &showTipsToggle });
     updateAccentVisibility();
 }
 
@@ -2506,6 +2569,11 @@ void SettingsPanel::resized()
     customColourBtn.setBounds(sr.removeFromLeft(100).withSizeKeepingCentre(100, 26));
     a.removeFromTop(18);
 
+    auto rowS = a.removeFromTop(30);
+    rowS.removeFromLeft(150);
+    uiScaleBox.setBounds(rowS.removeFromLeft(170));
+    a.removeFromTop(10);
+
     auto row2 = a.removeFromTop(30);
     row2.removeFromLeft(150);
     bufferSizeBox.setBounds(row2.removeFromLeft(170));
@@ -2537,6 +2605,8 @@ void SettingsPanel::paint(juce::Graphics& g)
     else
         a.removeFromTop(32);
     a.removeFromTop(18);
+    g.drawText(TR("Interface size"), a.removeFromTop(30).withWidth(150), juce::Justification::centredLeft);
+    a.removeFromTop(10);
     g.drawText(TR("Buffer size"), a.removeFromTop(30).withWidth(150), juce::Justification::centredLeft);
     a.removeFromTop(10);
     g.drawText(TR("Help"), a.removeFromTop(30).withWidth(150), juce::Justification::centredLeft);
@@ -2559,12 +2629,7 @@ MainComponent::MainComponent()
     juce::LookAndFeel::setDefaultLookAndFeel(&theme);
 
     // user settings file (remembers "don't show tips again", etc.)
-    juce::PropertiesFile::Options opts;
-    opts.applicationName     = "Pennyroyal Audio";
-    opts.filenameSuffix      = "settings";
-    opts.folderName          = "Pennyroyal Audio";
-    opts.osxLibrarySubFolder = "Application Support";
-    appProps.setStorageParameters(opts);
+    appProps.setStorageParameters(AppSettings::options());
 
     Lang::current = juce::jlimit(0, 1, settings().getIntValue("language", 0));
     Themes::apply(settings().getIntValue("theme", 0),
@@ -2672,6 +2737,13 @@ void MainComponent::buildUI()
             if (safeThis != nullptr) safeThis->applyLanguage(id);
         });
     };
+    sp->onUiScaleChanged = [safeThis](float scale)
+    {
+        juce::MessageManager::callAsync([safeThis, scale]
+        {
+            if (safeThis != nullptr) safeThis->applyUiScale(scale);
+        });
+    };
     tabs->addTab(TR("SETTINGS"), c(Negro), sp, true);
     tabs->getTabbedButtonBar().setWantsKeyboardFocus(false);
 
@@ -2710,6 +2782,23 @@ void MainComponent::applyLanguage(int languageId)
     if (!topBar) return;
     rebuildUI();
     setStatus(TR("Language: ") + Lang::names()[Lang::current]);
+}
+
+void MainComponent::applyUiScale(float scale)
+{
+    juce::Desktop::getInstance().setGlobalScaleFactor(scale);
+    settings().setValue("uiScale", (double)scale);
+    settings().saveIfNeeded();
+
+    // after the rescale, keep the window inside the screen
+    juce::Component::SafePointer<MainComponent> safeThis(this);
+    juce::MessageManager::callAsync([safeThis]
+    {
+        if (safeThis == nullptr) return;
+        if (auto* w = safeThis->findParentComponentOfClass<juce::DocumentWindow>())
+            AppSettings::fitWindowToScreen(*w);
+    });
+    setStatus(TR("Interface size: ") + juce::String(juce::roundToInt(scale * 100.0f)) + "%");
 }
 
 void MainComponent::rebuildUI()
